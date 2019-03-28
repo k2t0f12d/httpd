@@ -1,5 +1,5 @@
 /**
- * httpd.c
+ * httpd.h
  */
 
 #include <stdio.h>       /* For perror()        */
@@ -129,6 +129,7 @@ internal void respond(int n, int clients[], int clientfd,
                 struct header_t *h = reqhdr;
                 char *t = 0;
                 char *t2 = 0;
+                /* TODO: Check to see if strtok_r should be used here for thread saftey */
                 while(h < reqhdr+16) {
                         char *k,*v,*t;
                         k = strtok(NULL, "\r\n: \t"); if (!k) break;
@@ -141,7 +142,7 @@ internal void respond(int n, int clients[], int clientfd,
                         if (t[1] == '\r' && t[2] == '\n') break;
                 }
                 t++; // now the *t shall be the beginning of user payload
-                t2 = request_header("Content-Length", h); // and the related header if there is  
+                t2 = request_header("Content-Length", reqhdr); // and the related header if there is  
                 request->payload = t;
                 request->payload_size = t2 ? atol(t2) : (rcvd-(t-memory));
 
@@ -165,7 +166,7 @@ internal void respond(int n, int clients[], int clientfd,
         clients[n]=-1;
 }
 
-int main(int argc, char* argv[])
+int serve()
 {
         struct sockaddr_in clientaddr;
         socklen_t addrlen;
