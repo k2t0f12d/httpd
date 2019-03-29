@@ -1,3 +1,5 @@
+LDFLAGS="-1dl"
+
 all: server
 
 clean:
@@ -8,4 +10,4 @@ server: main.o
 	gcc -o server $^
 
 httpd.o: main.c
-	gcc -c -o main.o main.c
+	gcc -c -o main.o main.c $LDFLAGS

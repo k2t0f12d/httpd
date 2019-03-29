@@ -6,11 +6,21 @@
 #include <stdlib.h>      /* For exit()          */
 #include <unistd.h>      /* For fork()          */
 #include <string.h>      /* For memset()        */
-//#include <sys/types.h>   /* For ???             */
+
+#include <fcntl.h>        /* what these      */
+#include <dlfcn.h>        /* For dlopen()    */
+#ifdef __APPLE__
+  #include <libproc.h>    /* for proc_pidpath() */
+#else
+  #include <sys/sendfile.h> /* For sendfile() */
+#endif
+
+#include <sys/types.h>   /* For ???             */
 #include <sys/socket.h>  /* For accept()
                                 socket()
                                 socketaddr_in 
                                 socklen_t       */
+#include <errno.h>       /* For errno() */
 #include <netdb.h>       /* For struct addrinfo */
 #include <signal.h>      /* For signal() */
 #include <sys/mman.h>    /* For mmap()   */
@@ -23,10 +33,49 @@
 #define MAP_ANONYMOUS MAP_ANON
 #endif
 
-/* Disambiguate static keyword */
+/* NOTE: There is no build-in boolean in C */
+#define TRUE  1
+#define FALSE 0
+
+/* NOTE: Disambiguate static keyword */
 #define global static
 #define internal static
 #define persist static
+
+typedef int8_t   int8;
+typedef int16_t  int16;
+typedef int32_t  int32;
+typedef int64_t  int64;
+typedef int32    bool32;
+typedef int64    bool64;
+
+typedef uint8_t  uint8;
+typedef uint16_t uint16;
+typedef uint32_t uint32;
+typedef uint64_t uint64;
+
+typedef float    real32;
+typedef double   real64;
+
+typedef int8     i8;
+typedef int16    i16;
+typedef int32    i32;
+typedef int64    i64;
+typedef bool32   b32;
+typedef bool64   b64;
+
+typedef uint8    u8;
+typedef uint16   u16;
+typedef uint32   u32;
+typedef uint64   u64;
+
+typedef real32   r32;
+typedef real64   r64;
+
+
+#define pi32     3.14159265359f
+
+#define MAX_PATH 4096
 
 /* FEDEC Denominations */
 #define Kilobytes(Value) ((Value)*1024LL)
@@ -56,7 +105,7 @@ struct client_request
         char *qs;         /* "a=1&b=2" theings after '?' */
         char *prot;       /* "HTTP/1.1" */
         char *payload;    /* for POST */
-        int payload_size;
+        i32 payload_size;
 };
 
 struct header_t
@@ -99,7 +148,7 @@ void route(struct client_request *request, struct header_t *reqhdr)
 internal void respond(int n, int clients[], int clientfd,
                       struct client_request *request, struct header_t *reqhdr, char *memory)
 {
-        int rcvd, fd, bytes_read;
+        i32 rcvd, fd, bytes_read;
         char *ptr;
 
         rcvd = recv(clients[n], memory, Megabytes(20), 0);
@@ -166,7 +215,7 @@ internal void respond(int n, int clients[], int clientfd,
         clients[n]=-1;
 }
 
-int serve()
+internal i32 serve()
 {
         struct sockaddr_in clientaddr;
         socklen_t addrlen;
@@ -174,8 +223,8 @@ int serve()
         char port[5] = "8080\0";
 
         /* Init client array */
-        int clients[CONNMAX];
-        for(int i = 0; i < CONNMAX; i++)
+        i32 clients[CONNMAX];
+        for(i32 i = 0; i < CONNMAX; i++)
         {
                 clients[i] = -1;
         }
@@ -194,10 +243,10 @@ int serve()
         }
 
         /* socket and bind */
-        int listenfd;
+        i32 listenfd;
         for(p = res; p!=NULL; p=p->ai_next)
         {
-                int option = 1;
+                i32 option = 1;
                 listenfd = socket(p->ai_family, p->ai_socktype, 0);
                 setsockopt(listenfd, SOL_SOCKET, SO_REUSEADDR, &option, sizeof(option));
                 if(listenfd == -1) continue;
@@ -231,8 +280,8 @@ int serve()
                             PROT_READ|PROT_WRITE,MAP_ANONYMOUS|MAP_PRIVATE,-1,0);
         struct client_request request = {0};
         struct header_t reqhdr[17] = {{"\0", "\0"}};
-        int clientfd = 0;
-        int slot = 0;
+        i32 clientfd = 0;
+        i32 slot = 0;
         while (1)
         {
                 addrlen = sizeof(clientaddr);
