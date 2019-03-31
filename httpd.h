@@ -23,15 +23,8 @@
 #include <errno.h>       /* For errno() */
 #include <netdb.h>       /* For struct addrinfo */
 #include <signal.h>      /* For signal() */
-#include <sys/mman.h>    /* For mmap()   */
 
-/**
- * NOTE: MAP_ANONYMOUS is not defined on some other
- *       UNIX systems, use MAP_ANON instead.
- */
-#ifndef MAP_ANONYMOUS
-#define MAP_ANONYMOUS MAP_ANON
-#endif
+#include "kat_memory.h"  /* For KAT_VMEM() */
 
 /* NOTE: There is no build-in boolean in C */
 #define TRUE  1
@@ -139,7 +132,7 @@ void route(struct client_request *request, struct header_t *reqhdr)
     {
         printf("HTTP/1.1 200 OK\r\n\r\n");
         printf("Wow, seems that you POSTed %d bytes. \r\n", request->payload_size);
-        printf("Fetch the data using `payload` variable.");
+        printf("%s", request->payload);
     }
   
     ROUTE_END()
@@ -152,11 +145,13 @@ internal void respond(int n, int clients[], int clientfd,
         char *ptr;
 
         rcvd = recv(clients[n], memory, Megabytes(20), 0);
+        //fprintf(stderr, "READ FROM SOCKET >>>>>>\n%s\n", memory);
+        fflush(stderr);
 
         if(rcvd<0)        /* receive error */
                 fprintf(stderr,("recv() error\n"));
         else if(rcvd==0)  /* receive socket closed */
-                fprintf(stderr,"Client disconnected upexpectedly.\n");
+                fprintf(stderr,"Client disconnected unexpectedly.\n");
         else              /* message received */
         {
                 memory[rcvd] = '\0';
@@ -179,10 +174,11 @@ internal void respond(int n, int clients[], int clientfd,
                 char *t = 0;
                 char *t2 = 0;
                 /* TODO: Check to see if strtok_r should be used here for thread saftey */
+                i32 count = 0;
                 while(h < reqhdr+16) {
                         char *k,*v,*t;
                         k = strtok(NULL, "\r\n: \t"); if (!k) break;
-                        v = strtok(NULL, "\r\n");     while(*v && *v==' ') v++;
+                        v = strtok(NULL, "\r\n"); while(*v && *v==' ') v++;
                         h->name  = k;
                         h->value = v;
                         h++;
@@ -190,7 +186,7 @@ internal void respond(int n, int clients[], int clientfd,
                         t = v + 1 + strlen(v);
                         if (t[1] == '\r' && t[2] == '\n') break;
                 }
-                t++; // now the *t shall be the beginning of user payload
+                t=t+2; // now the *t shall be the beginning of user payload
                 t2 = request_header("Content-Length", reqhdr); // and the related header if there is  
                 request->payload = t;
                 request->payload_size = t2 ? atol(t2) : (rcvd-(t-memory));
@@ -220,7 +216,7 @@ internal i32 serve()
         struct sockaddr_in clientaddr;
         socklen_t addrlen;
 
-        char port[5] = "8080\0";
+        char port[] = "8080\0";
 
         /* Init client array */
         i32 clients[CONNMAX];
@@ -276,8 +272,7 @@ internal i32 serve()
         void *baseaddr = (void *)(0);
 #endif
 
-        void *memory = mmap(baseaddr,Megabytes(20),
-                            PROT_READ|PROT_WRITE,MAP_ANONYMOUS|MAP_PRIVATE,-1,0);
+        void *memory = KAT_VMEM(baseaddr,Megabytes(20));
         struct client_request request = {0};
         struct header_t reqhdr[17] = {{"\0", "\0"}};
         i32 clientfd = 0;
@@ -293,7 +288,7 @@ internal i32 serve()
                 }
                 else
                 {
-                        if (fork()==0 )  /* TODO: fork() is not portable */
+                        if (fork()==0)  /* TODO: fork() is not portable */
                         {
                                 respond(slot, clients, clientfd, &request, reqhdr, memory);
                                 exit(0);
