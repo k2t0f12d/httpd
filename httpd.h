@@ -15,7 +15,12 @@
   #include <sys/sendfile.h> /* For sendfile() */
 #endif
 
-#include <sys/types.h>   /* For ???             */
+#include <sys/types.h>   /* POSIX.1  does not require the inclusion of
+                            <sys/types.h>, and this header file is not
+                            required on Linux.  However, some historical
+                            (BSD) implementations required this header file,
+                            and portable applications are probably wise
+                            to include it */
 #include <sys/socket.h>  /* For accept()
                                 socket()
                                 socketaddr_in 
@@ -34,6 +39,8 @@
 #define global static
 #define internal static
 #define persist static
+
+#include "kat_util.h"    /* For print_raw() */
 
 typedef int8_t   int8;
 typedef int16_t  int16;
@@ -95,7 +102,7 @@ struct client_request
 {
         char *method;     /* HTTP method, Eg. GET or POST */
         char *uri;        /* Endpoint, Eg. '/index.html', things before '?' */
-        char *qs;         /* "a=1&b=2" theings after '?' */
+        char *qs;         /* "a=1&b=2" things after '?' */
         char *prot;       /* "HTTP/1.1" */
         char *payload;    /* for POST */
         i32 payload_size;
@@ -132,7 +139,7 @@ void route(struct client_request *request, struct header_t *reqhdr)
     {
         printf("HTTP/1.1 200 OK\r\n\r\n");
         printf("Wow, seems that you POSTed %d bytes. \r\n", request->payload_size);
-        printf("%s", request->payload);
+        printf("%s\r\n", request->payload);
     }
   
     ROUTE_END()
@@ -141,12 +148,10 @@ void route(struct client_request *request, struct header_t *reqhdr)
 internal void respond(int n, int clients[], int clientfd,
                       struct client_request *request, struct header_t *reqhdr, char *memory)
 {
-        i32 rcvd, fd, bytes_read;
+        i32 rcvd; //, fd, bytes_read;
         char *ptr;
 
         rcvd = recv(clients[n], memory, Megabytes(20), 0);
-        //fprintf(stderr, "READ FROM SOCKET >>>>>>\n%s\n", memory);
-        fflush(stderr);
 
         if(rcvd<0)        /* receive error */
                 fprintf(stderr,("recv() error\n"));
@@ -176,7 +181,7 @@ internal void respond(int n, int clients[], int clientfd,
                 /* TODO: Check to see if strtok_r should be used here for thread saftey */
                 i32 count = 0;
                 while(h < reqhdr+16) {
-                        char *k,*v,*t;
+                        char *k,*v;
                         k = strtok(NULL, "\r\n: \t"); if (!k) break;
                         v = strtok(NULL, "\r\n"); while(*v && *v==' ') v++;
                         h->name  = k;
@@ -186,7 +191,11 @@ internal void respond(int n, int clients[], int clientfd,
                         t = v + 1 + strlen(v);
                         if (t[1] == '\r' && t[2] == '\n') break;
                 }
-                t=t+2; // now the *t shall be the beginning of user payload
+                while(t[0] == '\r'|| t[0] == '\n')
+                {
+                        *t++;
+                } // now the *t shall be the beginning of user payload
+                fprintf(stderr, "[P] %s\r\n", t);
                 t2 = request_header("Content-Length", reqhdr); // and the related header if there is  
                 request->payload = t;
                 request->payload_size = t2 ? atol(t2) : (rcvd-(t-memory));
