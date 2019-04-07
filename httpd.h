@@ -2,6 +2,12 @@
  * httpd.h
  */
 
+#ifdef _WIN32
+#  include <windows.h>
+#  include <winsock2.h>
+#  include <ws2tcpip.h>
+#endif /* _WIN32 */
+
 #include <stdio.h>       /* For perror()        */
 #include <stdlib.h>      /* For exit()          */
 #include <unistd.h>      /* For fork()          */
@@ -29,59 +35,9 @@
 #include <netdb.h>       /* For struct addrinfo */
 #include <signal.h>      /* For signal() */
 
+#include "kat.h"         /* For types and defines */
 #include "kat_memory.h"  /* For KAT_VMEM() */
-
-/* NOTE: There is no build-in boolean in C */
-#define TRUE  1
-#define FALSE 0
-
-/* NOTE: Disambiguate static keyword */
-#define global static
-#define internal static
-#define persist static
-
 #include "kat_util.h"    /* For print_raw() */
-
-typedef int8_t   int8;
-typedef int16_t  int16;
-typedef int32_t  int32;
-typedef int64_t  int64;
-typedef int32    bool32;
-typedef int64    bool64;
-
-typedef uint8_t  uint8;
-typedef uint16_t uint16;
-typedef uint32_t uint32;
-typedef uint64_t uint64;
-
-typedef float    real32;
-typedef double   real64;
-
-typedef int8     i8;
-typedef int16    i16;
-typedef int32    i32;
-typedef int64    i64;
-typedef bool32   b32;
-typedef bool64   b64;
-
-typedef uint8    u8;
-typedef uint16   u16;
-typedef uint32   u32;
-typedef uint64   u64;
-
-typedef real32   r32;
-typedef real64   r64;
-
-
-#define pi32     3.14159265359f
-
-#define MAX_PATH 4096
-
-/* FEDEC Denominations */
-#define Kilobytes(Value) ((Value)*1024LL)
-#define Megabytes(Value) (Kilobytes(Value)*1024LL)
-#define Gigabytes(Value) (Megabytes(Value)*1024LL)
-#define Terabytes(Value) (Gigabytes(Value)*1024LL)
 
 /* Maximum number of clients */
 #define CONNMAX 1000
@@ -139,7 +95,10 @@ void route(struct client_request *request, struct header_t *reqhdr)
     {
         printf("HTTP/1.1 200 OK\r\n\r\n");
         printf("Wow, seems that you POSTed %d bytes. \r\n", request->payload_size);
-        printf("%s\r\n", request->payload);
+        if(request->payload_size)
+        {
+                printf("%s\r\n", request->payload);
+        }
     }
   
     ROUTE_END()
@@ -195,10 +154,13 @@ internal void respond(int n, int clients[], int clientfd,
                 {
                         *t++;
                 } // now the *t shall be the beginning of user payload
-                fprintf(stderr, "[P] %s\r\n", t);
                 t2 = request_header("Content-Length", reqhdr); // and the related header if there is  
                 request->payload = t;
                 request->payload_size = t2 ? atol(t2) : (rcvd-(t-memory));
+                if(request->payload_size)
+                {
+                        fprintf(stderr, "[P] %s\r\n", request->payload);
+                }
 
                 // bind clientfd to stdout, making it easier to write
                 clientfd = clients[n];
